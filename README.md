@@ -1,35 +1,69 @@
 # devops-api
 
-API REST simples construída com Python + FastAPI, usada como base do projeto DevOps na Prática (PUCRS ADS).
+API REST construída com Python 3.12 + FastAPI, usada como projeto prático da disciplina de DevOps (PUCRS ADS).
+
+Repositório: https://github.com/FelipeZag0/devops-api
+
+![CI](https://github.com/FelipeZag0/devops-api/actions/workflows/ci.yml/badge.svg)
+
+---
 
 ## Tecnologias
 
-- Python 3.12
-- FastAPI
-- pytest + pytest-cov
-- flake8
-- Docker
-- AWS CloudFormation (IaC)
-- GitHub Actions (CI)
+| Camada | Ferramenta |
+|---|---|
+| Linguagem | Python 3.12 |
+| Framework | FastAPI |
+| Testes | pytest + pytest-cov |
+| Lint | flake8 |
+| Containerização | Docker |
+| IaC | AWS CloudFormation |
+| CI | GitHub Actions |
+
+---
+
+## Instalação local
+
+**Pré-requisito:** Python 3.12+
+
+```bash
+# 1. Clonar o repositório
+git clone https://github.com/FelipeZag0/devops-api.git
+cd devops-api
+
+# 2. Criar e ativar o ambiente virtual
+python3 -m venv .venv
+source .venv/bin/activate   # Linux/macOS
+# .venv\Scripts\activate    # Windows
+
+# 3. Instalar dependências
+pip install -r requirements.txt
+```
+
+---
+
+## Execução
+
+```bash
+uvicorn src.main:app --reload
+```
+
+A API estará disponível em `http://localhost:8000`.  
+Documentação interativa (Swagger): `http://localhost:8000/docs`.
+
+---
 
 ## Endpoints
 
 | Método | Rota | Descrição |
-|--------|------|-----------|
+|---|---|---|
 | GET | `/health` | Health check |
 | GET | `/items` | Lista todos os itens |
-| POST | `/items` | Cria um novo item |
+| POST | `/items` | Cria um novo item (`name`, `description`) |
 | GET | `/items/{id}` | Retorna um item pelo ID |
 | DELETE | `/items/{id}` | Remove um item pelo ID |
 
-## Instalação e execução local
-
-```bash
-pip install -r requirements.txt
-uvicorn src.main:app --reload
-```
-
-A documentação interativa estará disponível em `http://localhost:8000/docs`.
+---
 
 ## Testes
 
@@ -37,25 +71,33 @@ A documentação interativa estará disponível em `http://localhost:8000/docs`.
 pytest tests/ --cov=src --cov-report=term-missing
 ```
 
+Resultado esperado: **7 testes passando, cobertura 100%**.
+
+---
+
 ## Lint
 
 ```bash
 flake8 src/ tests/ --max-line-length=100
 ```
 
+---
+
 ## Docker
 
 ```bash
-# Build
+# Build da imagem
 docker build -t devops-api .
 
-# Run
+# Executar o container
 docker run -p 8000:8000 devops-api
 ```
 
+---
+
 ## Infraestrutura (AWS CloudFormation)
 
-Pré-requisitos: AWS CLI configurado com credenciais válidas.
+**Pré-requisito:** AWS CLI configurado com credenciais válidas e permissões de EC2/VPC/CloudFormation.
 
 ```bash
 # Criar a stack
@@ -78,4 +120,4 @@ aws cloudformation describe-stacks \
 aws cloudformation delete-stack --stack-name devops-api
 ```
 
-Os recursos provisionados incluem: VPC, subnet pública, internet gateway, route table, security group e instância EC2 (t2.micro).
+Recursos provisionados: VPC, subnet pública, internet gateway, route table, security group e instância EC2 (t2.micro, Amazon Linux 2).
