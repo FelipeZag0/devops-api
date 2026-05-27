@@ -97,27 +97,65 @@ docker run -p 8000:8000 devops-api
 
 ## Infraestrutura (AWS CloudFormation)
 
-**Pré-requisito:** AWS CLI configurado com credenciais válidas e permissões de EC2/VPC/CloudFormation.
+O diretório `infra/` contém o template CloudFormation que provisiona toda a infraestrutura na AWS.
+
+**Recursos provisionados:** VPC, subnet pública, internet gateway, route table, security group e instância EC2 (t2.micro, Amazon Linux 2). Ao subir, a instância instala Docker, clona o repositório e executa a API automaticamente.
+
+### Pré-requisitos
+
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) instalado e configurado (`aws configure`)
+- Credenciais com permissões: `ec2:*`, `cloudformation:*`, `vpc:*`
+- Região: `us-east-1`
+
+### Parâmetros configuráveis
+
+| Parâmetro | Padrão | Descrição |
+|---|---|---|
+| `ProjectName` | `devops-api` | Prefixo dos recursos |
+| `Environment` | `dev` | Ambiente (`dev`, `staging`, `prod`) |
+| `InstanceType` | `t2.micro` | Tipo da instância EC2 |
+| `AmiId` | `ami-0c02fb55956c7d316` | AMI Amazon Linux 2 (us-east-1) |
+| `VpcCidr` | `10.0.0.0/16` | CIDR da VPC |
+| `SubnetCidr` | `10.0.1.0/24` | CIDR da subnet pública |
+| `SshCidr` | `0.0.0.0/0` | CIDR permitido para SSH (restrinja em produção) |
+
+### Comandos
 
 ```bash
-# Criar a stack
+# 1. Validar sintaxe do template
+aws cloudformation validate-template \
+  --template-body file://infra/template.yaml \
+  --region us-east-1
+
+# 2. Criar a stack
 aws cloudformation create-stack \
   --stack-name devops-api \
   --template-body file://infra/template.yaml \
   --region us-east-1
 
-# Acompanhar o status
+# 3. Acompanhar o status
 aws cloudformation describe-stacks \
   --stack-name devops-api \
   --query "Stacks[0].StackStatus"
 
-# Ver outputs (IP público, URL da API)
+# 4. Ver outputs (IP público, URL da API)
 aws cloudformation describe-stacks \
   --stack-name devops-api \
   --query "Stacks[0].Outputs"
 
-# Destruir a stack
+# 5. Destruir a stack
 aws cloudformation delete-stack --stack-name devops-api
 ```
 
-Recursos provisionados: VPC, subnet pública, internet gateway, route table, security group e instância EC2 (t2.micro, Amazon Linux 2).
+Para sobrescrever parâmetros na criação:
+
+```bash
+aws cloudformation create-stack \
+  --stack-name devops-api \
+  --template-body file://infra/template.yaml \
+  --region us-east-1 \
+  --parameters \
+    ParameterKey=Environment,ParameterValue=prod \
+    ParameterKey=InstanceType,ParameterValue=t3.small \
+    ParameterKey=SshCidr,ParameterValue=SEU_IP/32
+```
