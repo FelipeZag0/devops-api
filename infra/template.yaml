@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Infraestrutura para a devops-api — VPC, subnet publica, security group e instancia EC2
 
+# ============================================================
+# PARAMETROS — todos os valores configuráveis da stack
+# ============================================================
 Parameters:
   ProjectName:
     Type: String
@@ -23,23 +26,45 @@ Parameters:
     Default: ami-0c02fb55956c7d316
     Description: AMI Amazon Linux 2 (us-east-1)
 
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: Bloco CIDR da VPC
+
+  SubnetCidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: Bloco CIDR da subnet publica
+
+  SshCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR autorizado a acessar a instancia via SSH (restrinja em producao)
+
+# ============================================================
+# RECURSOS
+# ============================================================
 Resources:
-  # --- Rede ---
+
+  # --- VPC: rede isolada que contem todos os recursos ---
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-vpc"
         - Key: Environment
           Value: !Ref Environment
 
+  # --- Subnet publica: sub-rede com acesso direto a internet ---
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: !Ref SubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -47,6 +72,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # --- Internet Gateway: porta de saida/entrada da VPC para a internet ---
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -54,17 +80,23 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-igw"
 
+  # --- Associa o Internet Gateway à VPC ---
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
+  # --- Tabela de rotas: direciona trafego da subnet para o IGW ---
   RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-rtb"
 
+  # --- Rota padrao: todo trafego (0.0.0.0/0) sai pelo Internet Gateway ---
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: VPCGatewayAttachment
@@ -73,13 +105,14 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
+  # --- Associa a subnet publica à tabela de rotas ---
   SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref RouteTable
 
-  # --- Security Group: permite SSH (22) e acesso a API (8000) ---
+  # --- Security Group: firewall da instancia — libera SSH (22) e API (8000) ---
   ApiSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -89,7 +122,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref SshCidr
         - IpProtocol: tcp
           FromPort: 8000
           ToPort: 8000
@@ -103,7 +136,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # --- Instancia EC2 ---
+  # --- Instancia EC2: servidor que executa a API via Docker ---
   ApiInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -130,6 +163,9 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+# ============================================================
+# OUTPUTS — valores exportados apos criacao da stack
+# ============================================================
 Outputs:
   InstanceId:
     Description: ID da instancia EC2
