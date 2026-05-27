@@ -112,6 +112,18 @@ Resources:
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref ApiSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker git
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ec2-user
+          git clone https://github.com/FelipeZag0/devops-api.git /opt/devops-api
+          cd /opt/devops-api
+          docker build -t ${ProjectName} .
+          docker run -d -p 8000:8000 --restart unless-stopped --name ${ProjectName} ${ProjectName}
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-instance"
