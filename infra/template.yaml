@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Infraestrutura para a devops-api — VPC, subnet publica, security group e instancia EC2
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: devops-api
+    Description: Prefixo usado nos nomes dos recursos
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Ambiente de deploy
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Tipo da instancia EC2
+
+  AmiId:
+    Type: String
+    Default: ami-0c02fb55956c7d316
+    Description: AMI Amazon Linux 2 (us-east-1)
+
+Resources:
+  # --- Rede ---
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc"
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-subnet"
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-igw"
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # --- Security Group: permite SSH (22) e acesso a API (8000) ---
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Acesso SSH e API
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-sg"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # --- Instancia EC2 ---
+  ApiInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref ApiSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-instance"
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  InstanceId:
+    Description: ID da instancia EC2
+    Value: !Ref ApiInstance
+
+  InstancePublicIp:
+    Description: IP publico da instancia EC2
+    Value: !GetAtt ApiInstance.PublicIp
+
+  ApiUrl:
+    Description: URL de acesso a API
+    Value: !Sub "http://${ApiInstance.PublicIp}:8000"
+
+  VpcId:
+    Description: ID da VPC criada
+    Value: !Ref VPC
