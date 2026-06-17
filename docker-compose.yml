@@ -1,0 +1,29 @@
+# Orquestração single-host da API (EAP 3.2.1.1).
+# Declara o serviço da aplicação a partir da imagem publicada no Docker Hub.
+# Usado tanto localmente quanto na EC2 (o job de deploy do CD roda `compose up -d`).
+
+services:
+  api:
+    # Imagem publicada pelo pipeline de CD. O usuário do Docker Hub vem da
+    # variável de ambiente DOCKERHUB_USERNAME (definida pelo deploy.sh / CD).
+    # ":latest" sempre aponta para a última versão entregue (ver docs/cd-strategy.md).
+    image: ${DOCKERHUB_USERNAME:-felipezag0}/devops-api:latest
+
+    container_name: devops-api
+
+    # Mapeia a porta 8000 do host para a 8000 do container (porta da API).
+    ports:
+      - "8000:8000"
+
+    # Reinicia o container automaticamente em caso de falha ou reboot do host,
+    # exceto quando parado manualmente. Garante disponibilidade da API.
+    restart: unless-stopped
+
+    # Health check declarado também no compose (espelha o do Dockerfile) para o
+    # compose acompanhar o estado de saúde do serviço.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
