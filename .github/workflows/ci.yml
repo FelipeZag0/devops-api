@@ -56,3 +56,38 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:sha-${{ github.sha }}
+
+  # ── CD: deploy na EC2 da Fase 1 (EAP 2.2.2.1) ─────────────────────────────
+  # Roda após a imagem ser publicada. Copia o compose + script de deploy para a
+  # EC2 e executa o deploy via SSH (pull da nova imagem + recreate do container).
+  deploy:
+    needs: build-and-push              # encadeamento CI → build-push → deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Copiar compose e script de deploy para a EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml,scripts/deploy.sh"
+          target: "~/devops-api"
+
+      - name: Executar deploy na EC2 (pull + compose up -d)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # Passa usuário do Docker Hub p/ o script montar o nome da imagem
+          envs: DOCKERHUB_USERNAME
+          script: |
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            cd ~/devops-api
+            chmod +x scripts/deploy.sh
+            ./scripts/deploy.sh
