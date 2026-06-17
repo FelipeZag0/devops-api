@@ -146,10 +146,54 @@ se o push falhar, o deploy não ocorre. Mantém a política fail-fast da Fase 1.
 | Mecanismo de deploy | SSH + `docker compose pull && up -d` |
 | Estratégia de deploy | Recreate (app stateless) |
 | Encadeamento | `build` → `build-push` → `deploy` via `needs:` (fail-fast) |
-| Convenção de tag | Definida no pacote **2.1.1.2** (próximo) |
+| Convenção de tag | `latest` + `sha-<commit-curto>` (ver seção 6) |
 
 ---
 
-*Próximo pacote:* **2.1.1.2** — definir a convenção de versionamento/tagging da
-imagem (proposta: `latest` + `sha-<commit>`), que completa o desenho antes da
-implementação dos jobs (2.2.x).
+## 6. Convenção de versionamento da imagem (EAP 2.1.1.2)
+
+Toda imagem publicada no Docker Hub (`felipezag0/devops-api`) recebe **duas tags
+simultâneas** a cada entrega:
+
+| Tag | Exemplo | Como é gerada | Para que serve |
+|---|---|---|---|
+| `sha-<commit-curto>` | `sha-6ff58ea` | 7 primeiros caracteres de `${{ github.sha }}` | **Imutável e rastreável**: identifica exatamente o commit que originou a imagem. Permite rollback para uma versão específica. |
+| `latest` | `latest` | Fixa, sobrescrita a cada push na `main` | **Ponteiro móvel**: sempre aponta para a última imagem entregue. É a tag que o deploy na EC2 puxa por padrão. |
+
+**Exemplo de referência completa da imagem:**
+
+```
+felipezag0/devops-api:sha-6ff58ea     # versão exata do commit 6ff58ea
+felipezag0/devops-api:latest          # mesma imagem, como "última versão"
+```
+
+**Por que `latest` + SHA (e não SemVer `v1.2.3`):**
+
+- O **SHA** dá rastreabilidade total e imutável sem exigir gerência manual de
+  versões — cada build mapeia 1:1 com um commit da `main`.
+- O **`latest`** simplifica o deploy: o `docker-compose.yml` referencia
+  `:latest` e o script só precisa de `docker compose pull` para obter a versão
+  nova, sem editar arquivos a cada release.
+- **SemVer** (`v1.0.0`) seria mais adequado a um produto com releases versionados
+  e changelog; aqui adicionaria etapa manual de *tag/release* a cada entrega,
+  sem ganho real no escopo single-host/acadêmico. Fica registrado como melhoria
+  futura (pacote 4.3.1.1).
+
+**Como será implementado (entrada para 2.2.1.1):** o job `build-push` usa
+`docker/metadata-action` ou define as tags manualmente a partir de
+`${{ github.sha }}`, publicando ambas no mesmo `docker push`:
+
+```yaml
+tags: |
+  felipezag0/devops-api:latest
+  felipezag0/devops-api:sha-${{ github.sha }}
+```
+
+> Observação: no workflow o SHA completo (`github.sha`) pode ser usado direto na
+> tag; a forma curta `sha-6ff58ea` é a representação humana usada nesta
+> documentação e nos prints da demonstração.
+
+---
+
+*Próximo pacote:* **2.2.1.1** — implementar o job `build-push` no GitHub Actions
+aplicando esta convenção de tags e publicando no Docker Hub.
