@@ -4,10 +4,11 @@
 
 services:
   api:
-    # Imagem publicada pelo pipeline de CD. O usuário do Docker Hub vem da
-    # variável de ambiente DOCKERHUB_USERNAME (definida pelo deploy.sh / CD).
-    # ":latest" sempre aponta para a última versão entregue (ver docs/cd-strategy.md).
-    image: ${DOCKERHUB_USERNAME:-felipezag0}/devops-api:latest
+    # Imagem publicada pelo pipeline de CD. O usuário do Docker Hub vem de
+    # DOCKERHUB_USERNAME e a tag de IMAGE_TAG (ambas definidas pelo deploy.sh / CD).
+    # IMAGE_TAG default "latest"; o CD pode passar "sha-<commit>" para deploy
+    # determinístico (ver docs/cd-strategy.md).
+    image: ${DOCKERHUB_USERNAME:-felipezag0}/devops-api:${IMAGE_TAG:-latest}
 
     container_name: devops-api
 

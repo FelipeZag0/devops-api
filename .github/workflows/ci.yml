@@ -31,6 +31,16 @@ jobs:
       - name: Build da imagem Docker
         run: docker build -t devops-api:${{ github.sha }} .
 
+      - name: Smoke test da imagem (sobe o container e valida /health)
+        run: |
+          docker run -d --name smoke -p 8000:8000 devops-api:${{ github.sha }}
+          for i in $(seq 1 10); do
+            if curl -fs http://localhost:8000/health; then echo " <- /health OK"; break; fi
+            sleep 2
+          done
+          curl -fs http://localhost:8000/health
+          docker rm -f smoke
+
   # ── CD: publica a imagem no Docker Hub (EAP 2.2.1.1) ──────────────────────
   # Roda só em push na main (após merge de PR com CI verde), nunca em PR.
   build-and-push:
@@ -84,10 +94,11 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          # Passa usuário do Docker Hub p/ o script montar o nome da imagem
-          envs: DOCKERHUB_USERNAME
+          # Passa usuário do Docker Hub e a tag exata (sha) p/ deploy determinístico
+          envs: DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
             export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            export IMAGE_TAG=sha-${{ github.sha }}
             cd ~/devops-api
             chmod +x scripts/deploy.sh
             ./scripts/deploy.sh

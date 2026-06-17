@@ -15,29 +15,42 @@
 # (.github/workflows/ci.yml), que exporta DOCKERHUB_USERNAME antes de executar.
 #
 # Pré-requisitos no host:
-#   - Docker + plugin docker compose instalados
+#   - Docker + Compose (plugin v2 "docker compose" OU binário v1 "docker-compose")
 #   - docker-compose.yml presente no diretório atual
 # Variáveis:
 #   - DOCKERHUB_USERNAME : usuário do Docker Hub dono da imagem (default: felipezag0)
+#   - IMAGE_TAG          : tag da imagem a implantar (default: latest; ex.: sha-<commit>)
 # ============================================================================
 
 set -euo pipefail   # aborta em erro, variável indefinida ou falha em pipe
 
-# Usuário do Docker Hub (usado pelo compose para montar o nome da imagem).
+# Usuário do Docker Hub e tag (usados pelo compose para montar o nome da imagem).
 export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-felipezag0}"
-IMAGE="${DOCKERHUB_USERNAME}/devops-api:latest"
+export IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE="${DOCKERHUB_USERNAME}/devops-api:${IMAGE_TAG}"
+
+# Compatibilidade compose v2 (plugin "docker compose") x v1 (binário "docker-compose").
+# Amazon Linux 2, por exemplo, pode ter apenas o v1.
+if docker compose version >/dev/null 2>&1; then
+  DC="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+  DC="docker-compose"
+else
+  echo "!! ERRO: Docker Compose não encontrado (nem 'docker compose' nem 'docker-compose')." >&2
+  exit 1
+fi
 
 echo ">> Deploy da devops-api iniciado ($(date '+%Y-%m-%d %H:%M:%S'))"
-echo ">> Imagem alvo: ${IMAGE}"
+echo ">> Imagem alvo: ${IMAGE}  (compose: ${DC})"
 
-# 1. Puxa a última versão da imagem do registry.
-echo ">> [1/4] Baixando a imagem mais recente..."
-docker compose pull
+# 1. Puxa a versão alvo da imagem do registry.
+echo ">> [1/4] Baixando a imagem (${IMAGE_TAG})..."
+$DC pull
 
 # 2. (Re)cria o container com a nova imagem. --remove-orphans limpa serviços
 #    antigos; o compose recria apenas o que mudou.
 echo ">> [2/4] Subindo o container..."
-docker compose up -d --remove-orphans
+$DC up -d --remove-orphans
 
 # 3. Remove imagens antigas/órfãs para não acumular disco na EC2.
 echo ">> [3/4] Limpando imagens não utilizadas..."
@@ -55,5 +68,5 @@ for i in $(seq 1 10); do
 done
 
 echo "!! ERRO: API não respondeu em /health após o deploy." >&2
-docker compose logs --tail=30 || true
+$DC logs --tail=30 || true
 exit 1
