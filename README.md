@@ -85,13 +85,29 @@ flake8 src/ tests/ --max-line-length=100
 
 ## Docker
 
+A aplicação é containerizada com um `Dockerfile` baseado em `python:3.12-slim`,
+seguindo boas práticas: camada de dependências cacheável, usuário **não-root**,
+`HEALTHCHECK` no endpoint `/health` e `.dockerignore` para reduzir o contexto de build.
+
 ```bash
 # Build da imagem
 docker build -t devops-api .
 
-# Executar o container
+# Executar o container (mapeando a porta 8000 do host)
 docker run -p 8000:8000 devops-api
+
+# Verificar a aplicação
+curl http://localhost:8000/health   # -> {"status":"ok"}
 ```
+
+Para inspecionar o estado de saúde reportado pelo HEALTHCHECK:
+
+```bash
+docker ps                            # coluna STATUS mostra (healthy)
+```
+
+> Orquestração com Docker Compose e deploy automatizado: ver seção
+> [Orquestração e Deploy](#orquestração-e-deploy).
 
 ---
 
