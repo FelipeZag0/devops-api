@@ -30,3 +30,29 @@ jobs:
 
       - name: Build da imagem Docker
         run: docker build -t devops-api:${{ github.sha }} .
+
+  # ── CD: publica a imagem no Docker Hub (EAP 2.2.1.1) ──────────────────────
+  # Roda só em push na main (após merge de PR com CI verde), nunca em PR.
+  build-and-push:
+    needs: build                       # encadeamento CI → CD (fail-fast)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build e push da imagem (tags latest + sha-<commit>)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:sha-${{ github.sha }}
