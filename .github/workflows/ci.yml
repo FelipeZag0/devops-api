@@ -30,3 +30,75 @@ jobs:
 
       - name: Build da imagem Docker
         run: docker build -t devops-api:${{ github.sha }} .
+
+      - name: Smoke test da imagem (sobe o container e valida /health)
+        run: |
+          docker run -d --name smoke -p 8000:8000 devops-api:${{ github.sha }}
+          for i in $(seq 1 10); do
+            if curl -fs http://localhost:8000/health; then echo " <- /health OK"; break; fi
+            sleep 2
+          done
+          curl -fs http://localhost:8000/health
+          docker rm -f smoke
+
+  # ── CD: publica a imagem no Docker Hub (EAP 2.2.1.1) ──────────────────────
+  # Roda só em push na main (após merge de PR com CI verde), nunca em PR.
+  build-and-push:
+    needs: build                       # encadeamento CI → CD (fail-fast)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build e push da imagem (tags latest + sha-<commit>)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:sha-${{ github.sha }}
+
+  # ── CD: deploy na EC2 da Fase 1 (EAP 2.2.2.1) ─────────────────────────────
+  # Roda após a imagem ser publicada. Copia o compose + script de deploy para a
+  # EC2 e executa o deploy via SSH (pull da nova imagem + recreate do container).
+  deploy:
+    needs: build-and-push              # encadeamento CI → build-push → deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Copiar compose e script de deploy para a EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml,scripts/deploy.sh"
+          target: "~/devops-api"
+
+      - name: Executar deploy na EC2 (pull + compose up -d)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # Passa usuário do Docker Hub e a tag exata (sha) p/ deploy determinístico
+          envs: DOCKERHUB_USERNAME,IMAGE_TAG
+          script: |
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            export IMAGE_TAG=sha-${{ github.sha }}
+            cd ~/devops-api
+            chmod +x scripts/deploy.sh
+            ./scripts/deploy.sh

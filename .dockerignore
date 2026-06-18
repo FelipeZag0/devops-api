@@ -1,0 +1,31 @@
+# Reduz o contexto enviado ao Docker daemon no build (build mais rápido e
+# imagem sem arquivos desnecessários). Mantém só o que a aplicação precisa.
+
+# Git e metadados
+.git
+.gitignore
+
+# Ambientes virtuais e caches Python
+.venv
+venv
+__pycache__/
+*.py[cod]
+.pytest_cache
+.coverage
+htmlcov
+
+# Testes (não vão para a imagem de produção)
+tests/
+
+# CI/CD, IaC e documentação (não fazem parte da imagem da aplicação)
+.github/
+infra/
+docs/
+scripts/
+docker-compose.yml
+*.md
+
+# Arquivos de editor/SO
+.vscode/
+.idea/
+.DS_Store
