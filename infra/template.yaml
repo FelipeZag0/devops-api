@@ -18,8 +18,12 @@ Parameters:
 
   InstanceType:
     Type: String
-    Default: t2.micro
-    Description: Tipo da instancia EC2
+    Default: t3.micro
+    Description: Tipo da instancia EC2 (t3.micro = elegivel ao Free Tier em contas novas)
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Nome do par de chaves EC2 para acesso SSH (deploy via CD)
 
   AmiId:
     Type: String
@@ -65,6 +69,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref SubnetCidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -142,6 +147,7 @@ Resources:
     Properties:
       ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref ApiSecurityGroup
@@ -153,10 +159,16 @@ Resources:
           systemctl start docker
           systemctl enable docker
           usermod -aG docker ec2-user
-          git clone https://github.com/FelipeZag0/devops-api.git /opt/devops-api
-          cd /opt/devops-api
-          docker build -t ${ProjectName} .
-          docker run -d -p 8000:8000 --restart unless-stopped --name ${ProjectName} ${ProjectName}
+          # instala o plugin Docker Compose v2 (necessario para o deploy via CD)
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+            -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          # clona o repo e sobe a API via compose (imagem publicada no Docker Hub)
+          git clone https://github.com/FelipeZag0/devops-api.git /home/ec2-user/devops-api
+          cd /home/ec2-user/devops-api
+          DOCKERHUB_USERNAME=felipezag0 docker compose up -d
+          chown -R ec2-user:ec2-user /home/ec2-user/devops-api
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-instance"
