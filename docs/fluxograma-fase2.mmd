@@ -1,0 +1,64 @@
+---
+config:
+  theme: base
+  themeVariables:
+    fontSize: "18px"
+    fontFamily: "Segoe UI, Arial, sans-serif"
+  flowchart:
+    curve: basis
+    nodeSpacing: 38
+    rankSpacing: 50
+    padding: 14
+---
+flowchart TB
+
+    %% ───────── BANDA 1 — INTEGRAÇÃO CONTÍNUA ─────────
+    subgraph CI [" 1 · INTEGRAÇÃO CONTÍNUA — GitHub Actions (push e pull_request na main) "]
+        direction LR
+        A([" Commit / push<br/>feature/fase2-cd "]) --> PR([" Abre Pull<br/>Request → main "])
+        PR --> C1["Checkout +<br/>Python 3.12"]
+        C1 --> C2["pip install"]
+        C2 --> C3["Lint<br/>flake8"]
+        C3 --> C4["Testes<br/>pytest --cov"]
+        C4 --> C5["Build da<br/>imagem Docker"]
+        C5 --> C6["Smoke test<br/>/health"]
+        C6 --> D{"CI<br/>verde?"}
+        D -- "Não" --> FAIL["Merge bloqueado<br/>autor notificado"]:::fail
+        D -- "Sim · em PR" --> WAIT["Pronto p/ merge<br/>(sem deploy)"]:::ok
+        D == "Sim · push na main" ==> T1[" ↓ segue p/ Entrega Contínua "]:::link
+    end
+
+    %% ───────── BANDA 2 — ENTREGA CONTÍNUA ─────────
+    subgraph CD [" 2 · ENTREGA CONTÍNUA — só em push na main "]
+        direction LR
+        MERGE([" Merge<br/>na main "]) --> P1["build-and-push:<br/>login Docker Hub"]
+        P1 --> P2["build da<br/>imagem"]
+        P2 --> P3["push — tags<br/>latest + sha-commit"]
+        P3 --> REG[("Docker Hub<br/>felipezag0/devops-api")]:::reg
+        REG ==> T2[" ↓ segue p/ Deploy "]:::link
+    end
+
+    %% ───────── BANDA 3 — DEPLOY + INFRA ─────────
+    subgraph DEP [" 3 · DEPLOY automatizado + INFRAESTRUTURA — EC2 (us-east-1) "]
+        direction LR
+        G1["SCP: copia<br/>compose + deploy.sh"] --> G2["SSH: executa<br/>scripts/deploy.sh"]
+        G2 --> H1["docker compose<br/>pull"]
+        H1 --> H2["compose up -d<br/>--remove-orphans"]
+        H2 --> H3["image<br/>prune"]
+        H3 --> H4{"/health<br/>= 200?"}
+        H4 -- "Não" --> RB["Deploy falha<br/>logs do container"]:::fail
+        H4 == "Sim" ==> APP([" API no ar — healthy<br/>http://EC2:8000 "]):::ok
+    end
+
+    %% liga os containers (não os nós internos) p/ empilhar as bandas na vertical
+    CI ~~~ CD
+    CD ~~~ DEP
+
+    classDef ok   fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724;
+    classDef fail fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#721c24;
+    classDef reg  fill:#cfe2ff,stroke:#0d6efd,stroke-width:2px,color:#084298;
+    classDef link fill:#fff3cd,stroke:#e0a800,stroke-width:2px,color:#7a5c00;
+
+    style CI  fill:#fffdf3,stroke:#e0c200,stroke-width:2px
+    style CD  fill:#eef7ff,stroke:#5aa9e6,stroke-width:2px
+    style DEP fill:#eafaf1,stroke:#2ecc71,stroke-width:2px
